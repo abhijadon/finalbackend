@@ -2,11 +2,11 @@ const Team = require('@/models/Team');
 
 const paginatedList = async (Model, req, res) => {
   try {
-    const user = req.user;
     const instituteName = req.query.instituteName;
     const universityName = req.query.universityName;
     const userId = req.query.userId;
-
+    const teammembersId = req.query.teammembersId;
+ 
     let query = { removed: false };
 
     if (instituteName) {
@@ -31,41 +31,18 @@ const paginatedList = async (Model, req, res) => {
           message: 'No data found for the specified user',
         });
       }
-    } else {
-      // If userId is not provided, handle based on user's role
-      if (user.role === 'manager') {
-        const team = await Team.findOne({ userId: user._id }).populate('teamMembers');
+    }
 
-        if (team) {
-          query['customfields.institute_name'] = { $in: team.institute };
-          query['customfields.university_name'] = { $in: team.university };
-          query['institute_name'] = { $in: team.institute };
-          query['university_name'] = { $in: team.university };
-        } else {
-          // No team assigned, return no data
-          query['userId'] = null;
-        }
-      } else if (user.role === 'supportiveassociate' || user.role === 'teamleader') {
-        const team = await Team.findOne({ userId: user._id }).populate('teamMembers');
-
-        if (team) {
-          const teamMemberIds = team.teamMembers.map(member => member._id);
-          query['userId'] = { $in: [user._id, ...teamMemberIds] };
-        } else {
-          // No team assigned, return no data
-          query['userId'] = null;
-        }
-      } else if (user.role === 'admin' || user.role === 'subadmin') {
-        // Admin and subadmin can see all data, no restrictions
-      } else {
-        query['userId'] = user._id; // Default case for other users
-      }
+    if (teammembersId) {
+      query['userId'] = { $in: [...teammembersId, userId] };
     }
 
     const resultsPromise = Model.find(query)
       .sort({ created: 'desc' })
-      .populate('userId');
-    const countPromise = Model.countDocuments(query);
+      .populate('userId')
+      .exec();
+
+    const countPromise = Model.countDocuments(query).exec();
 
     const [result, count] = await Promise.all([resultsPromise, countPromise]);
 
